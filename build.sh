@@ -76,6 +76,15 @@ cd $KERNEL_DIR
 # 获取最新的 commit hash
 KERNEL_HEAD_HASH=$(git log --pretty=format:'%H' -1)
 
+# 已知问题修复：tcpc_wusb3801.c 在新版 Clang 下会因 -Werror 触发编译失败
+# 通过 CFLAGS_<file>.o 针对单个文件覆盖，该机制在 Kbuild 中排在最后，
+# 可以确保盖过驱动自身 Makefile 里的 -Werror
+TCPC_MAKEFILE="$KERNEL_DIR/drivers/misc/mediatek/typec/tcpc/Makefile"
+if [ -f "$TCPC_MAKEFILE" ]; then
+	echo "CFLAGS_tcpc_wusb3801.o += -Wno-error" >> "$TCPC_MAKEFILE"
+	msg " • 🌸 Patched tcpc_wusb3801.o CFLAGS to silence -Werror 🌸 "
+fi
+
 # 集成 KernelSU, 目标版本 v3.2.5, 参考 https://github.com/tiann/KernelSU/tree/v3.2.5
 msg " • 🌸 Patching KernelSU 🌸 "
 curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v3.2.5

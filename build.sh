@@ -7,6 +7,14 @@
 # 设置工作目录
 WORKDIR="$(pwd)"
 
+# ==========================================
+# 🛑 VARIABEL ANYKERNEL3 (DITAMBAHKAN) 🛑
+# ==========================================
+# Silakan ganti URL di bawah jika kamu memiliki repo AnyKernel3 khusus untuk Selene
+ANYKERNEL3_GIT="https://github.com/osm0sis/AnyKernel3.git" 
+ANYKERNEL3_BRANCHE="master"
+# ==========================================
+
 # Neutron Clang 工具链路径
 NEUTRONCLANG_DIR="$WORKDIR/NeutronClang"
 
@@ -22,6 +30,10 @@ SEA_KERNEL_VERSION="Ayaka"
 SEA_KERNEL_CODENAME="9/Ayaka🐲✨"
 # SeaKernel 代号（用于 sed）
 SEA_KERNEL_CODENAME_ESCAPE="9\/Ayaka🐲✨"
+
+# Root 方案选择: "kernelsu" 或 "mambosu"（两者是同源分支，不能同时集成）
+# 可在触发 workflow 时通过环境变量 ROOT_SOLUTION 覆盖，默认用 kernelsu
+ROOT_SOLUTION="${ROOT_SOLUTION:-kernelsu}"
 
 # 编译配置
 # 设备代号
@@ -85,12 +97,19 @@ if [ -f "$TCPC_MAKEFILE" ]; then
 	msg " • 🌸 Patched tcpc_wusb3801.o CFLAGS to silence -Werror 🌸 "
 fi
 
-# 集成 KernelSU, 目标版本 v3.2.5, 参考 https://github.com/tiann/KernelSU/tree/v3.2.5
-msg " • 🌸 Patching KernelSU 🌸 "
-curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v3.2.5
+# 集成 Root 方案 (KernelSU 或 MamboSU，二选一)
+if [ "$ROOT_SOLUTION" = "mambosu" ]; then
+	ROOT_LABEL="MamboSU"
+	msg " • 🌸 Patching MamboSU (RapliVx KernelSU fork) 🌸 "
+	curl -LSs "https://raw.githubusercontent.com/RapliVx/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s master
+else
+	ROOT_LABEL="KernelSU"
+	msg " • 🌸 Patching KernelSU, 目标版本 v3.2.5 🌸 "
+	curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v3.2.5
+fi
 KSU_GIT_VERSION=$(cd KernelSU && git rev-list --count HEAD)
 KERNELSU_VERSION=$(($KSU_GIT_VERSION + 10000 + 200))
-msg " • 🌸 KernelSU version: $KERNELSU_VERSION 🌸 "
+msg " • 🌸 $ROOT_LABEL version: $KERNELSU_VERSION 🌸 "
 
 # 应用补丁
 msg " • 🌸 Applying patches 🌸 "
@@ -161,20 +180,27 @@ fi
 # 打包内核
 msg " • 🌸 Packing Kernel 🌸 "
 cd $WORKDIR
+
+# 🛑 PERBAIKAN: Menambahkan error handling saat clone 🛑
 # 克隆 Anykernel3
-git clone --depth=1 $ANYKERNEL3_GIT -b $ANYKERNEL3_BRANCHE $WORKDIR/Anykernel3
-cd $WORKDIR/Anykernel3
+git clone --depth=1 $ANYKERNEL3_GIT -b $ANYKERNEL3_BRANCHE $WORKDIR/Anykernel3 || { echo -e " • \033[31mGagal clone AnyKernel3!\033[0m"; exit 1; }
+cd $WORKDIR/Anykernel3 || exit 1
+
 # 复制内核镜像、dtb、dtbo
 cp $IMAGE .
-cp $DTB $WORKDIR/Anykernel3/dtb
+# Memastikan folder dtb ada sebelum dicopy
+mkdir -p $WORKDIR/Anykernel3/dtb
+cp $DTB $WORKDIR/Anykernel3/dtb/
 cp $DTBO .
-# 添加 KernelSU 版本信息到 banner
-echo "• Within KernelSU $KERNELSU_VERSION !!!" >> $WORKDIR/Anykernel3/banner
+# 添加 Root 方案版本信息到 banner
+# Pastikan file banner ada agar tidak error no such file
+touch $WORKDIR/Anykernel3/banner
+echo "• Within $ROOT_LABEL $KERNELSU_VERSION !!!" >> $WORKDIR/Anykernel3/banner
 
 # 打包成 zip
 time=$(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S")
 shanghai_time=$(TZ='Asia/Shanghai' date +%Y%m%d%H)
-ZIP_NAME="KernelSU-$KERNELSU_VERSION-ROSS-selene-$KERNEL_VERSION-Sea-$SEA_KERNEL_VERSION-$shanghai_time-GithubCI"
+ZIP_NAME="$ROOT_LABEL-$KERNELSU_VERSION-ROSS-selene-$KERNEL_VERSION-Sea-$SEA_KERNEL_VERSION-$shanghai_time-GithubCI"
 find ./ * -exec touch -m -d "$time" {} \;
 zip -r9 $ZIP_NAME.zip *
 cp *.zip $WORKDIR/out && cp $DTBO $WORKDIR/out
@@ -182,12 +208,12 @@ cp *.zip $WORKDIR/out && cp $DTBO $WORKDIR/out
 # 生成 Release 信息
 cd $WORKDIR/out
 echo "
-### SEA KERNEL WITH KERNELSU
+### SEA KERNEL WITH ${ROOT_LABEL^^}
 - 🌊 **Build Time** : $(TZ='Asia/Shanghai' date +"%Y-%m-%d %H:%M:%S") # ShangHai TIME
 - 🌊 **Device Code** : $DEVICES_CODE
 - 🌊 **Sea Kernel Codename** : R¹.$SEA_KERNEL_CODENAME
 - 🌊 **Linux Version** : $KERNEL_VERSION
-- 🌊 **KernelSU Version**: $KERNELSU_VERSION
+- 🌊 **$ROOT_LABEL Version**: $KERNELSU_VERSION
 - 🌊 **Clang Version**: $CLANG_VERSION
 - 🌊 **LLD Version**: $LLD_VERSION
 - 🌊 **Anykernel3**: $ZIP_NAME.zip

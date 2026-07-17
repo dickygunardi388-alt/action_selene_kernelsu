@@ -7,10 +7,8 @@
 # 设置工作目录
 WORKDIR="$(pwd)"
 
-# ZyClang 工具链下载链接
-ZYCLANG_DLINK="https://github.com/ZyCromerZ/Clang/releases/download/19.0.0git-20240217-release/Clang-19.0.0git-20240217.tar.gz"
-# ZyClang 工具链路径
-ZYCLANG_DIR="$WORKDIR/ZyClang/bin"
+# Neutron Clang 工具链路径
+NEUTRONCLANG_DIR="$WORKDIR/NeutronClang"
 
 # 内核源码 Git 仓库地址
 KERNEL_GIT="https://github.com/25ji-Telegram-de/android_kernel_xiaomi_selene.git"
@@ -53,18 +51,23 @@ msg() {
 # 切换到工作目录
 cd $WORKDIR
 
-# 下载并解压 ZyClang 工具链
+# 下载 Neutron Clang 工具链（使用 antman 管理）
 msg " • 🌸 Work on $WORKDIR 🌸"
-msg " • 🌸 Cloning Toolchain 🌸 "
-msg " • 🌸 Donwload $ZYCLANG_DLINK 🌸 "
-mkdir -p ZyClang
-aria2c -s16 -x16 -k1M $ZYCLANG_DLINK -o ZyClang.tar.gz
-tar -C ZyClang/ -zxvf ZyClang.tar.gz
-rm -rf ZyClang.tar.gz
+msg " • 🌸 Cloning Neutron Clang Toolchain 🌸 "
+if [[ ! -d "$NEUTRONCLANG_DIR" ]]; then
+	mkdir -p "$NEUTRONCLANG_DIR"
+	cd "$NEUTRONCLANG_DIR"
+	curl -LO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
+	if ! bash antman -S=latest; then
+		echo -e " • \033[31mNeutron Clang setup failed!\033[0m"
+		exit 1
+	fi
+	cd "$WORKDIR"
+fi
 
 # 获取 CLANG 和 LLVM 版本信息
-CLANG_VERSION="$($ZYCLANG_DIR/clang --version | head -n 1)"
-LLD_VERSION="$($ZYCLANG_DIR/ld.lld --version | head -n 1)"
+CLANG_VERSION="$($NEUTRONCLANG_DIR/bin/clang --version | head -n 1)"
+LLD_VERSION="$($NEUTRONCLANG_DIR/bin/ld.lld --version | head -n 1)"
 
 # 克隆内核源码
 msg " • 🌸 Cloning Kernel Source 🌸 "
@@ -73,30 +76,29 @@ cd $KERNEL_DIR
 # 获取最新的 commit hash
 KERNEL_HEAD_HASH=$(git log --pretty=format:'%H' -1)
 
-# 集成 KernelSU
-# msg " • 🌸 Patching KernelSU 🌸 "
-# curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-# KSU_GIT_VERSION=$(cd KernelSU && git rev-list --count HEAD)
-# KERNELSU_VERSION=$(($KSU_GIT_VERSION + 10000 + 200))
-# msg " • 🌸 KernelSU version: $KERNELSU_VERSION 🌸 "
+ 集成 KernelSU (目标版本: v3.2.5 - https://github.com/tiann/KernelSU/tree/v3.2.5)
+ msg " • 🌸 Patching KernelSU 🌸 "
+  curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v3.2.5
+  KSU_GIT_VERSION=$(cd KernelSU && git rev-list --count HEAD)
+  KERNELSU_VERSION=$(($KSU_GIT_VERSION + 10000 + 200))
+  msg " • 🌸 KernelSU version: $KERNELSU_VERSION 🌸 "
 
 # 应用补丁
-# msg " • 🌸 Applying patches 🌸 "
+ msg " • 🌸 Applying patches 🌸 "
 
-# apply_patchs () {
-# for patch_file in $WORKDIR/patchs/*.patch
-# 	do
-# 	patch -p1 < "$patch_file"
-# done
-# }
-# apply_patchs
+ apply_patchs () {
+ for patch_file in $WORKDIR/patchs/*.patch
+ 	do
+ 	patch -p1 < "$patch_file"
+ done
+ }
+ apply_patchs
 
 # # 启用 KernelSU
-# echo -e "\n# KernelSU\nCONFIG_KSU=y" >> $DEVICE_DEFCONFIG_FILE
+ echo -e "\n# KernelSU\nCONFIG_KSU=y" >> $DEVICE_DEFCONFIG_FILE
 
 # 修改内核版本号
-# sed -i "/CONFIG_LOCALVERSION=\"/s/.$/$SEA_KERNEL_CODENAME_ESCAPE-KSU-$KERNELSU_VERSION"/g" $DEVICE_DEFCONFIG_FILE
-# msg " • 🌸 $(grep 'CONFIG_LOCALVERSION=' $DEVICE_DEFCONFIG_FILE) 🌸 "
+ sed -i "/CONFIG_LOCALVERSION=\"/s/.$/$SEA_KERNEL_CODENAME_ESCAPE-KSU-$KERNELSU_VERSION"/g" $DEVICE_DEFCONFIG_FILE  msg " • 🌸 $(grep 'CONFIG_LOCALVERSION=' $DEVICE_DEFCONFIG_FILE) 🌸 "
 
 # 编译内核
 msg " • 🌸 Started Compilation 🌸 "
@@ -105,7 +107,7 @@ msg " • 🌸 Started Compilation 🌸 "
 mkdir -p $WORKDIR/out
 
 # 编译参数
-args="PATH=$ZYCLANG_DIR:$PATH \
+args="PATH=$NEUTRONCLANG_DIR/bin:$PATH \
 ARCH=arm64 \
 SUBARCH=arm64 \
 CROSS_COMPILE=aarch64-linux-gnu- \

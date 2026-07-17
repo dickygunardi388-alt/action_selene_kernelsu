@@ -131,7 +131,8 @@ HOSTAR=llvm-ar \
 HOSTLD=ld.lld \
 HOSTCC=clang \
 HOSTCXX=clang++ \
-LLVM=1"
+LLVM=1 \
+KCFLAGS=-Wno-error"
 
 # 获取 Linux 内核版本
 rm -rf out

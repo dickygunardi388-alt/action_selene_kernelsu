@@ -33,15 +33,8 @@ jobs:
       - name: 🌊 Upload to Release‌‌...
         uses: ncipollo/release-action@main
         with:
-              - name: Upload to Release
-        uses: ncipollo/release-action@main
-        with:
-          artifacts: "out/*.zip, out/*.img" # (Atau sesuai pengaturanmu)
-          token: ${{ secrets.GITHUB_TOKEN }} # 👈 TAMBAHKAN BARIS INI
-          # ... (parameter lain yang mungkin kamu pakai, biarkan saja)
-
           artifacts: "${{ github.workspace }}/out/*"
           name: KernelSU-${{ env.KERNELSU_VERSION }}-${{ env.KERNEL_VERSION }}-${{ github.run_id }}
           tag: ${{ github.run_id }}
           bodyFile: "${{ github.workspace }}/out/RELEASE.md"
-          token: ${{ secrets.TOKEN_MOCHENYA }}
+          token: ${{ secrets.GITHUB_TOKEN }}
